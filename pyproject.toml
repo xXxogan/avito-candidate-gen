@@ -1,0 +1,28 @@
+[project]
+name = "avito-candidate-gen"
+version = "0.1.0"
+description = "Candidate generation for Avito's service search: based on a short text query, it selects up to 50 relevant listings from the database for subsequent ranking."
+readme = "README.md"
+authors = [
+    { name = "Xogan", email = "yarok2005@mail.ru" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "faiss-cpu>=1.15.1",
+    "jupyter>=1.1.1",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
+    "pymorphy3>=2.0.6",
+    "rank-bm25>=0.2.2",
+    "scikit-learn>=1.9.1",
+    "sentence-transformers>=6.1.0",
+    "torch>=2.14.0",
+]
+
+[project.scripts]
+avito-candidate-gen = "avito_candidate_gen:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
