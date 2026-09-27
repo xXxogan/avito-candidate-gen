@@ -52,6 +52,21 @@ def load_benchmark_items(path: Path | None = None) -> pd.DataFrame:
     return _fix_decimal_columns(df)
 
 
+# Загрузка объявлений с уже посчитанным item_text_processed
+def load_processed_train(path: Path | None = None) -> pd.DataFrame:
+    path = _resolve_path(
+        path, DATA_RAW_DIR.parent / "processed" / "train_processed.parquet"
+    )
+    return pd.read_parquet(path)
+
+
+def load_processed_items(path: Path | None = None) -> pd.DataFrame:
+    path = _resolve_path(
+        path, DATA_RAW_DIR.parent / "processed" / "benchmark_items_processed.parquet"
+    )
+    return pd.read_parquet(path)
+
+
 def train_val_split(
     df_train: pd.DataFrame, val_size: float = 0.2, random_state: int = 42
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -61,7 +76,7 @@ def train_val_split(
     """
 
     unique_queries = np.asarray(df_train["search_query"].unique())
-    train_q, val_q = train_test_split(
+    _, val_q = train_test_split(
         unique_queries, test_size=val_size, random_state=random_state
     )
 
