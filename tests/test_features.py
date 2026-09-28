@@ -109,3 +109,32 @@ def test_popularity_from_train_clicks(corpus):
     assert df["pop_norm"].iloc[0] > 0
     assert df["pop_norm"].iloc[1] == 0.0
     assert df["pop_norm"].iloc[2] == 0.0
+
+
+def test_build_arrays_fills_extra_source_scores(corpus):
+    fb = FeatureBuilder(corpus)
+    qrec = make_query_record(make_row(), "маникюр")
+    extra = {
+        "bm25_title_norm": np.array([1.0, 0.5], dtype=np.float32),
+        "char_sim": np.array([0.0, 0.8], dtype=np.float32),
+    }
+    feats = fb.build_arrays(
+        qrec,
+        np.array([0, 2]),
+        np.array([2.0, 1.0], dtype=np.float32),
+        extra_scores=extra,
+    )
+    df = pd.DataFrame(feats, columns=FEATURE_COLUMNS)
+    assert df["bm25_title_norm"].tolist() == pytest.approx([1.0, 0.5])
+    assert df["char_sim"].tolist() == pytest.approx([0.0, 0.8], abs=1e-6)
+
+
+def test_build_arrays_without_extra_scores_fills_zeros(corpus):
+    fb = FeatureBuilder(corpus)
+    qrec = make_query_record(make_row(), "маникюр")
+    feats = fb.build_arrays(
+        qrec, np.array([0, 1]), np.array([1.0, 0.5], dtype=np.float32)
+    )
+    df = pd.DataFrame(feats, columns=FEATURE_COLUMNS)
+    assert (df["bm25_title_norm"] == 0).all()
+    assert (df["char_sim"] == 0).all()

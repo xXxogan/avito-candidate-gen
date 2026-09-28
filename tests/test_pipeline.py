@@ -1,15 +1,17 @@
 """
 Дымовые тесты пайплайна на игрушечном корпусе:
-полный цикл «запросы -> топ-k» и добивка коротких ответов.
+полный цикл «запросы -> топ-k», union источников и добивка коротких ответов.
 """
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from avito_candidate_gen.pipeline import (
     _backfill,
     _popular_fallback,
     generate_candidates,
+    merge_sources,
 )
 
 
@@ -17,6 +19,13 @@ def make_corpus():
     return pd.DataFrame(
         {
             "item_id": ["a1", "a2", "b1", "b2", "c1"],
+            "item_title_raw": [
+                "Маникюр педикюр",
+                "Маникюр ногти",
+                "Ремонт квартир",
+                "Ремонт ванной",
+                "Свадебный маникюр",
+            ],
             "item_text_processed": [
                 "маникюр педикюр салон",
                 "маникюр наращивание ногти",
@@ -60,7 +69,14 @@ def test_generate_candidates_smoke():
     corpus = make_corpus()
     pop = pd.Series({"a1": 5, "b1": 2})
     preds = generate_candidates(
-        make_queries(), corpus, popularity=pop, top_k=4, final_k=2, batch_size=1
+        make_queries(),
+        corpus,
+        popularity=pop,
+        top_k=4,
+        title_k=4,
+        char_k=4,
+        final_k=2,
+        batch_size=1,
     )
     assert set(preds) == {"q1", "q2"}
     for ids in preds.values():
@@ -70,6 +86,23 @@ def test_generate_candidates_smoke():
     # запрос про маникюр в локации 100 с фильтром «Красота»:
     # a1 совпадает и по тексту, и по локации, и по фильтру
     assert "a1" in preds["q1"]
+
+
+def test_merge_sources_union_and_order():
+    pos_a = np.array([5, 2], dtype=np.int32)
+    pos_b = np.array([2, 7], dtype=np.int32)
+    sa = np.array([1.0, 0.5], dtype=np.float32)
+    sb = np.array([0.8, 0.3], dtype=np.float32)
+
+    union, sc = merge_sources([pos_a, pos_b], [sa, sb])
+
+    # порядок первого появления: сначала кандидаты источника A в его порядке
+    assert union.tolist() == [5, 2, 7]
+    rows = {int(p): sc[i].tolist() for i, p in enumerate(union)}
+    # approx: скоры хранятся в float32, 0.8 представляется неточно
+    assert rows[5] == pytest.approx([1.0, 0.0])  # есть только в A
+    assert rows[2] == pytest.approx([0.5, 0.8])  # в обоих — скоры на месте
+    assert rows[7] == pytest.approx([0.0, 0.3])  # есть только в B
 
 
 def test_backfill_fills_short_predictions():

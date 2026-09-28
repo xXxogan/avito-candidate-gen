@@ -17,7 +17,9 @@ import pandas as pd
 
 # Фиксированный порядок признаков
 FEATURE_COLUMNS = [
-    "bm25_norm",  # BM25-скор, нормированный на максимум внутри запроса
+    "bm25_norm",  # BM25 по полному тексту, нормированный на максимум запроса
+    "bm25_title_norm",  # BM25 только по заголовку, нормированный
+    "char_sim",  # косинус char n-gram (2–4) по заголовку, 0..1
     "loc_match",  # 1.0, если локация запроса == локации объявления
     "params_overlap",  # доля токенов фильтра, найденных в параметрах объявления
     "has_filter",  # 1.0, если у запроса вообще есть фильтр
@@ -92,50 +94,66 @@ class FeatureBuilder:
         ]
 
     def build_arrays(
-        self, qrec: dict, pos: np.ndarray, bm25_scores: np.ndarray
+        self,
+        qrec: dict,
+        pos: np.ndarray,
+        bm25_scores: np.ndarray,
+        extra_scores: dict[str, np.ndarray] | None = None,
     ) -> np.ndarray:
         """
-        Матрица признаков (n_кандидатов * len(FEATURE_COLUMNS))
+        Матрица признаков (n_кандидатов × len(FEATURE_COLUMNS))
 
         pos — позиции кандидатов в корпусе (индексы из retrieve_batch),
-        bm25_scores — их BM25-скоры в том же порядке
+        bm25_scores — скоры основного BM25 (полный текст) в том же порядке,
+        extra_scores — скоры дополнительных источников {колонка: массив},
+        уже приведённые вызывающим кодом к масштабу 0..1 (bm25 по заголовкам
+        нормирован на максимум запроса, char_sim — косинус).
+        Кандидаты, которых источник не вернул, получают 0.
         """
         pos = np.asarray(pos)
         n = len(pos)
-        out = np.empty((n, len(FEATURE_COLUMNS)), dtype=np.float32)
+        col = {name: i for i, name in enumerate(FEATURE_COLUMNS)}
+        out = np.zeros((n, len(FEATURE_COLUMNS)), dtype=np.float32)
 
-        # 0. bm25_norm — нормировка на максимум внутри запроса
+        # Скоры источников: основной BM25 нормируется здесь,
+        # дополнительные приходят готовыми
         scores = np.asarray(bm25_scores, dtype=np.float32)
         mx = scores.max() if n else 0.0
-        out[:, 0] = scores / mx if mx > 0 else 0.0
+        out[:, col["bm25_norm"]] = scores / mx if mx > 0 else 0.0
+        for name, arr in (extra_scores or {}).items():
+            out[:, col[name]] = arr
 
-        # 1. loc_match — точное совпадение локации
-        out[:, 1] = self.loc[pos] == qrec["location_id"]
+        # loc_match — точное совпадение локации
+        out[:, col["loc_match"]] = self.loc[pos] == qrec["location_id"]
 
-        # 2-3. params_overlap + has_filter: без фильтра overlap всегда 0
+        # params_overlap + has_filter: без фильтра overlap всегда 0
         ftok = qrec["filter_tokens"]
-        out[:, 3] = 1.0 if ftok else 0.0
+        out[:, col["has_filter"]] = 1.0 if ftok else 0.0
         if ftok:
-            out[:, 2] = [len(ftok & self.infm_tokens[j]) / len(ftok) for j in pos]
-        else:
-            out[:, 2] = 0.0
+            out[:, col["params_overlap"]] = [
+                len(ftok & self.infm_tokens[j]) / len(ftok) for j in pos
+            ]
 
-        # 4. title_coverage — доля токенов запроса в заголовке
+        # title_coverage — доля токенов запроса в заголовке
         qtok = qrec["tokens"]
         if qtok:
-            out[:, 4] = [len(qtok & self.title_tokens[j]) / len(qtok) for j in pos]
-        else:
-            out[:, 4] = 0.0
+            out[:, col["title_coverage"]] = [
+                len(qtok & self.title_tokens[j]) / len(qtok) for j in pos
+            ]
 
-        # 5-8. атрибуты объявления — готовыми массивами по позициям
-        out[:, 5] = self.rating[pos]
-        out[:, 6] = self.rating_missing[pos]
-        out[:, 7] = self.reviews[pos]
-        out[:, 8] = self.pop[pos]
+        # атрибуты объявления — готовыми массивами по позициям
+        out[:, col["rating_norm"]] = self.rating[pos]
+        out[:, col["rating_missing"]] = self.rating_missing[pos]
+        out[:, col["reviews_norm"]] = self.reviews[pos]
+        out[:, col["pop_norm"]] = self.pop[pos]
         return out
 
     def build(
-        self, qrec: dict, candidate_ids: list[str], bm25_scores: np.ndarray
+        self,
+        qrec: dict,
+        candidate_ids: list[str],
+        bm25_scores: np.ndarray,
+        extra_scores: dict[str, np.ndarray] | None = None,
     ) -> pd.DataFrame:
         """
         То же, что build_arrays, но принимает item_id и возвращает DataFrame
@@ -150,7 +168,7 @@ class FeatureBuilder:
             dtype=np.int64,
             count=len(candidate_ids),
         )
-        feats = self.build_arrays(qrec, pos, bm25_scores)
+        feats = self.build_arrays(qrec, pos, bm25_scores, extra_scores)
 
         df = pd.DataFrame(feats, columns=FEATURE_COLUMNS)
         df.insert(0, "item_id", list(candidate_ids))

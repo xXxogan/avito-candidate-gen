@@ -1,11 +1,12 @@
 """
-Тесты BM25Retriever — в частности нового retrieve_batch,
-который возвращает позиции и скоры для реранкера.
+Тесты ретриверов: BM25Retriever (в частности retrieve_batch со скорами)
+и CharNgramRetriever (поиск по символьным n-граммам).
 """
 
 import pandas as pd
 
 from avito_candidate_gen.retrieval.bm25 import BM25Retriever
+from avito_candidate_gen.retrieval.char_ngram import CharNgramRetriever
 
 IDS = ["i1", "i2", "i3"]
 TEXTS = ["маникюр педикюр", "ремонт квартир сантехник", "маникюр наращивание"]
@@ -37,3 +38,24 @@ def test_from_dataframe_custom_text_col():
     )
     r = BM25Retriever.from_dataframe(df, text_col="item_title_lemma")
     assert r.search("маникюр", top_k=1) == ["a"]
+
+
+# --- Char n-gram ---
+
+CHAR_IDS = ["i1", "i2", "i3"]
+CHAR_TEXTS = ["электрик проводка", "маникюр педикюр", "ремонт квартир"]
+
+
+def test_char_ngram_finds_typo():
+    # min_df=1: на игрушечном корпусе из 3 документов редкие граммы не выживают
+    r = CharNgramRetriever(CHAR_IDS, CHAR_TEXTS, min_df=1)
+    pos, sc = r.retrieve_batch(["электирик"], top_k=1)
+    assert CHAR_IDS[pos[0][0]] == "i1"  # опечатка всё равно ведёт к «электрик»
+    assert sc[0][0] > 0
+
+
+def test_char_ngram_returns_k_for_unknown_query():
+    r = CharNgramRetriever(CHAR_IDS, CHAR_TEXTS, min_df=1)
+    pos, sc = r.retrieve_batch(["zzz qqq"], top_k=2)
+    assert pos.shape == (1, 2)
+    assert (sc == 0).all()  # ни одного совпадающего грамма

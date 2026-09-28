@@ -1,4 +1,4 @@
 approach,params,recall_at_50,comment
 bm25_baseline,"title_repeats=2, lemmatized (pymorphy3), corpus=344825 unique train items",0.35339834762647687,title+description+infm_params combined text
 boost_rerank_bm25_top300,"{'bm25_norm': 1.0, 'title_coverage': 0.25, 'loc_match': 0.15, 'params_overlap': 0.15, 'pop_norm': 0.1, 'rating_norm': 0.05, 'reviews_norm': 0.05, 'rating_missing': 0.0, 'has_filter': 0.0}",0.4408998608613334,linear rerank of BM25 top-300: loc/params/title/rating/pop
-boost_rerank_bm25_top300,"{'bm25_norm': 1.0, 'loc_match': 0.5, 'params_overlap': 0.75, 'has_filter': 0.0, 'title_coverage': 0.25, 'rating_norm': 0.0, 'rating_missing': 0.0, 'reviews_norm': 0.0, 'pop_norm': 0.0}",0.4657748599453818,linear rerank of BM25 top-200: loc/params/title/rating/pop
+multi_source_boost_rerank,"{'bm25_norm': 1.0, 'bm25_title_norm': 0.0, 'char_sim': 0.3, 'loc_match': 0.5, 'params_overlap': 0.75, 'has_filter': 0.0, 'title_coverage': 0.25, 'rating_norm': 0.0, 'rating_missing': 0.0, 'reviews_norm': 0.0, 'pop_norm': 0.0}",0.4741598082493406,"union BM25 full+title top-200 + char-ngram top-200, linear rerank"
