@@ -1,0 +1,2 @@
+approach,params,recall_at_50,comment
+bm25_baseline,"title_repeats=2, lemmatized (pymorphy3), corpus=344825 unique train items",0.35339834762647687,title+description+infm_params combined text

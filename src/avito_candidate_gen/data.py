@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 
 DATA_RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 DATA_PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
 
 DECIMAL_COLUMNS = ["item_price", "item_latitude", "item_longitude"]
 
