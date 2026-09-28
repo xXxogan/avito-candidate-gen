@@ -95,6 +95,38 @@ def add_processed_text_columns(df_items: pd.DataFrame) -> pd.DataFrame:
     return df_items
 
 
+def add_title_lemma_column(
+    df_items: pd.DataFrame,
+    cache_path: Path,
+    force_recompute: bool = False,
+) -> pd.DataFrame:
+    """
+    Добавление колонки item_title_lemma – лемматизированного заголовка.
+
+    Нужна для признака title_coverage реранкера и для BM25-индекса
+    только по заголовкам
+
+    В кэше хранится таблица «уникальный заголовок -> леммы»
+    """
+    if cache_path.exists() and not force_recompute:
+        print(f"Читаю кэш заголовков: {cache_path}")
+        title_map = pd.read_parquet(cache_path)
+    else:
+        unique_titles = df_items["item_title_raw"].astype(str).unique()
+        print(f"Лемматизирую {len(unique_titles):,} уникальных заголовков...")
+        title_map = pd.DataFrame({"item_title_raw": unique_titles})
+        title_map["item_title_lemma"] = [lemmatize_text(t) for t in unique_titles]
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        title_map.to_parquet(cache_path)
+        print(f"Сохранено в {cache_path}")
+
+    lookup = dict(zip(title_map["item_title_raw"], title_map["item_title_lemma"]))
+    df_items = df_items.copy()
+    df_items["item_title_lemma"] = df_items["item_title_raw"].astype(str).map(lookup)
+    return df_items
+
+
 def get_or_build_processed_items(
     df_items: pd.DataFrame,
     cache_path: Path,
